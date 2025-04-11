@@ -21,7 +21,8 @@ fun RTSPStreamUI(
     onStopRecord: () -> Unit,
     onEnterPip: () -> Unit,
     onViewRecordings: () -> Unit,
-    isRecording: Boolean
+    isRecording: Boolean,
+    isInPipMode: Boolean
 ) {
     val rtspUrl = remember { mutableStateOf("rtsp://admin:admin@192.168.0.107:8554/live") }
 
@@ -43,72 +44,75 @@ fun RTSPStreamUI(
             },
             modifier = Modifier
                 .fillMaxWidth()
-                .height(240.dp)
+                .height(if (isInPipMode) 240.dp else 240.dp)
         )
+        if (!isInPipMode) {
+            Spacer(modifier = Modifier.height(16.dp))
 
-        Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(8.dp))
 
-        if (isRecording) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.padding(bottom = 8.dp)
-            ) {
-                Box(
-                    modifier = Modifier
-                        .size(12.dp)
-                        .background(Color.Red, CircleShape)
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                Text("Recording...", color = Color.Red)
+            if (isRecording) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.padding(bottom = 8.dp)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(12.dp)
+                            .background(Color.Red, CircleShape)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Recording...", color = Color.Red)
+                }
             }
-        }
 
-        OutlinedTextField(
-            value = rtspUrl.value,
-            onValueChange = { rtspUrl.value = it },
-            label = { Text("RTSP URL") },
-            singleLine = true,
-            modifier = Modifier.fillMaxWidth()
-        )
+            OutlinedTextField(
+                value = rtspUrl.value,
+                onValueChange = { rtspUrl.value = it },
+                label = { Text("RTSP URL") },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth()
+            )
 
-        Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(8.dp))
 
-        Button(
-            onClick = { onPlay(rtspUrl.value) },
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Text("Play Stream")
-        }
-
-        if (!isRecording) {
             Button(
-                onClick = onStartRecord,
+                onClick = { onPlay(rtspUrl.value) },
                 modifier = Modifier.fillMaxWidth()
             ) {
-                Text("Start Recording")
+                Text("Play Stream")
             }
-        } else {
+
+            if (!isRecording) {
+                Button(
+                    onClick = onStartRecord,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("Start Recording")
+                }
+            } else {
+                Button(
+                    onClick = onStopRecord,
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = ButtonDefaults.buttonColors(containerColor = Color.Red)
+                ) {
+                    Text("Stop Recording", color = Color.White)
+                }
+            }
+
             Button(
-                onClick = onStopRecord,
-                modifier = Modifier.fillMaxWidth(),
-                colors = ButtonDefaults.buttonColors(containerColor = Color.Red)
+                onClick = onViewRecordings,
+                modifier = Modifier.fillMaxWidth()
             ) {
-                Text("Stop Recording", color = Color.White)
+                Text("View Recordings")
             }
-        }
 
-        Button(
-            onClick = onViewRecordings,
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Text("View Recordings")
-        }
-
-        Button(
-            onClick = onEnterPip,
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Text("Enter PiP Mode")
+            Button(
+                onClick = onEnterPip,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text("Enter PiP Mode")
+            }
         }
     }
 }

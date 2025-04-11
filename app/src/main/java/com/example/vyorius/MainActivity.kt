@@ -9,6 +9,8 @@ import android.widget.Toast
 import androidx.activity.compose.setContent
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import com.arthenica.ffmpegkit.FFmpegKit
 import kotlinx.coroutines.*
 import org.videolan.libvlc.LibVLC
@@ -17,6 +19,8 @@ import org.videolan.libvlc.MediaPlayer
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.*
+import androidx.compose.runtime.*
+
 
 class MainActivity : AppCompatActivity() {
     private var libVLC: LibVLC? = null
@@ -25,6 +29,8 @@ class MainActivity : AppCompatActivity() {
     private var recordingJob: Job? = null
     private var currentRecordingFile: File? = null
     private var currentStreamUrl: String = ""
+    private var isInPipMode = false
+
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -33,6 +39,12 @@ class MainActivity : AppCompatActivity() {
         mediaPlayer = MediaPlayer(libVLC)
 
         setContent {
+            var pipState by remember { mutableStateOf(isInPipMode) }
+
+            // Sync changes from system callback
+            LaunchedEffect(isInPipMode) {
+                pipState = isInPipMode
+            }
             RTSPStreamUI(
                 onSurfaceReady = { vlcVideoLayout ->
                     mediaPlayer?.attachViews(vlcVideoLayout, null, false, false)
@@ -68,7 +80,8 @@ class MainActivity : AppCompatActivity() {
                         .setPositiveButton("OK", null)
                         .show()
                 },
-                isRecording = isRecording
+                isRecording = isRecording,
+                        isInPipMode = isInPipMode
             )
         }
     }
@@ -119,5 +132,6 @@ class MainActivity : AppCompatActivity() {
 
     override fun onPictureInPictureModeChanged(isInPictureInPictureMode: Boolean, newConfig: Configuration) {
         super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig)
+        isInPipMode = isInPictureInPictureMode
     }
 }
