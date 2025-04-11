@@ -1,14 +1,17 @@
 package com.example.vyorius
 
 import android.view.ViewGroup
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import org.videolan.libvlc.util.VLCVideoLayout
-import androidx.compose.ui.graphics.Color
 
 @Composable
 fun RTSPStreamUI(
@@ -19,8 +22,8 @@ fun RTSPStreamUI(
     onEnterPip: () -> Unit,
     onViewRecordings: () -> Unit,
     isRecording: Boolean
-){
-    val rtspUrl = remember { mutableStateOf("rtsp://") }
+) {
+    val rtspUrl = remember { mutableStateOf("rtsp://admin:admin@192.168.0.107:8554/live") }
 
     Column(
         modifier = Modifier
@@ -31,22 +34,35 @@ fun RTSPStreamUI(
         AndroidView(
             factory = {
                 VLCVideoLayout(it).apply {
-                    visibility = android.view.View.VISIBLE // 👈 Ensure it's visible
                     layoutParams = ViewGroup.LayoutParams(
                         ViewGroup.LayoutParams.MATCH_PARENT,
                         ViewGroup.LayoutParams.MATCH_PARENT
                     )
-                    post{ onSurfaceReady(this) }
+                    onSurfaceReady(this)
                 }
             },
             modifier = Modifier
                 .fillMaxWidth()
-                .height(240.dp) // fixed height so buttons are visible
+                .height(240.dp)
         )
 
-        Spacer(modifier = Modifier.height(16.dp))
+        Spacer(modifier = Modifier.height(8.dp))
 
-        // Editable RTSP URL
+        if (isRecording) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.padding(bottom = 8.dp)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(12.dp)
+                        .background(Color.Red, CircleShape)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text("Recording...", color = Color.Red)
+            }
+        }
+
         OutlinedTextField(
             value = rtspUrl.value,
             onValueChange = { rtspUrl.value = it },
@@ -57,7 +73,6 @@ fun RTSPStreamUI(
 
         Spacer(modifier = Modifier.height(8.dp))
 
-        // Buttons
         Button(
             onClick = { onPlay(rtspUrl.value) },
             modifier = Modifier.fillMaxWidth()
@@ -65,23 +80,21 @@ fun RTSPStreamUI(
             Text("Play Stream")
         }
 
-        if (isRecording) {
-            Text("● Recording", color = Color.Red, modifier = Modifier.padding(bottom = 8.dp))
-        }
-        Button(
-            onClick = onStartRecord,
-            modifier = Modifier.fillMaxWidth(),
-            enabled = !isRecording
-        ) {
-            Text("Start Recording")
-        }
-
-        Button(
-            onClick = onStopRecord,
-            modifier = Modifier.fillMaxWidth(),
-            enabled = isRecording
-        ) {
-            Text("Stop Recording")
+        if (!isRecording) {
+            Button(
+                onClick = onStartRecord,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text("Start Recording")
+            }
+        } else {
+            Button(
+                onClick = onStopRecord,
+                modifier = Modifier.fillMaxWidth(),
+                colors = ButtonDefaults.buttonColors(containerColor = Color.Red)
+            ) {
+                Text("Stop Recording", color = Color.White)
+            }
         }
 
         Button(

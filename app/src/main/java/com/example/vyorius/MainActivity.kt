@@ -9,94 +9,58 @@ import android.widget.Toast
 import androidx.activity.compose.setContent
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
-import androidx.compose.runtime.mutableStateOf
+import com.arthenica.ffmpegkit.FFmpegKit
+import kotlinx.coroutines.*
 import org.videolan.libvlc.LibVLC
 import org.videolan.libvlc.Media
 import org.videolan.libvlc.MediaPlayer
 import java.io.File
 import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
-
+import java.util.*
 
 class MainActivity : AppCompatActivity() {
-
     private var libVLC: LibVLC? = null
     private var mediaPlayer: MediaPlayer? = null
-    val isRecording = mutableStateOf(false)
+    private var isRecording = false
+    private var recordingJob: Job? = null
+    private var currentRecordingFile: File? = null
+    private var currentStreamUrl: String = ""
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        val args = arrayListOf("--no-drop-late-frames", "--no-skip-frames")
-        libVLC = LibVLC(this, args)
+        libVLC = LibVLC(this, arrayListOf("--no-drop-late-frames", "--no-skip-frames"))
         mediaPlayer = MediaPlayer(libVLC)
 
         setContent {
             RTSPStreamUI(
                 onSurfaceReady = { vlcVideoLayout ->
-                    // Attach views inside a post block to avoid layout issues
-                    vlcVideoLayout.post {
-                        mediaPlayer?.attachViews(vlcVideoLayout, null, false, false)
-                    }
+                    mediaPlayer?.attachViews(vlcVideoLayout, null, false, false)
                 },
                 onPlay = { url ->
+                    currentStreamUrl = url
                     val media = Media(libVLC, Uri.parse(url))
                     mediaPlayer?.media = media
                     media.release()
-
-                    mediaPlayer?.setEventListener { event ->
-                        when (event.type) {
-                            MediaPlayer.Event.Playing -> {
-                                runOnUiThread {
-                                    Toast.makeText(this, "Stream started!", Toast.LENGTH_SHORT).show()
-                                }
-                            }
-
-                            MediaPlayer.Event.EncounteredError -> {
-                                runOnUiThread {
-                                    Toast.makeText(this, "Error playing stream", Toast.LENGTH_SHORT).show()
-                                }
-                            }
-                        }
-                    }
-
                     mediaPlayer?.play()
+                    Toast.makeText(this, "Stream started", Toast.LENGTH_SHORT).show()
                 },
                 onStartRecord = {
-                    val timestamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(Date())
-                    val filePath = File(filesDir, "stream_$timestamp.mp4").absolutePath
-                    mediaPlayer?.record(filePath, true)
-                    isRecording.value = true
-                    Toast.makeText(this, "Recording started", Toast.LENGTH_SHORT).show()
+                    if (!isRecording) startFFmpegRecording()
                 },
                 onStopRecord = {
-                    mediaPlayer?.record(null, false)
-                    isRecording.value = false
-                    Toast.makeText(this, "Recording stopped", Toast.LENGTH_SHORT).show()
+                    if (isRecording) stopFFmpegRecording()
                 },
                 onEnterPip = {
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                         enterPictureInPictureMode(PictureInPictureParams.Builder().build())
-                    } else {
-                        Toast.makeText(this, "PiP not supported on this device", Toast.LENGTH_SHORT).show()
                     }
                 },
-                        onViewRecordings = {
-                    val recordings = filesDir.listFiles()
-                        ?.filter { it.name.endsWith(".mp4") }
-                        ?.sortedByDescending { it.lastModified() }
-                        ?: emptyList()
-
-                    val message = if (recordings.isNotEmpty()) {
-                        recordings.joinToString("\n\n") {
-                            val sizeInMB = it.length() / (1024 * 1024.0)
-                            val lastModified = android.text.format.DateFormat.format("yyyy-MM-dd HH:mm:ss", it.lastModified())
-                            "${it.name}\nSize: %.2f MB\nLast Modified: $lastModified".format(sizeInMB)
-                        }
-                    } else {
-                        "No recordings found."
-                    }
+                onViewRecordings = {
+                    val recordings = filesDir.listFiles()?.filter { it.name.endsWith(".mp4") } ?: emptyList()
+                    val message = if (recordings.isNotEmpty())
+                        recordings.joinToString("\n") { it.name }
+                    else "No recordings found."
 
                     AlertDialog.Builder(this)
                         .setTitle("Saved Recordings")
@@ -104,27 +68,44 @@ class MainActivity : AppCompatActivity() {
                         .setPositiveButton("OK", null)
                         .show()
                 },
-                isRecording = isRecording.value
+                isRecording = isRecording
             )
         }
     }
+
+    private fun startFFmpegRecording() {
+        val timestamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(Date())
+        val outputFile = File(filesDir, "stream_$timestamp.mp4")
+        currentRecordingFile = outputFile
+        isRecording = true
+
+        val command = "-i $currentStreamUrl -c copy -f mp4 ${outputFile.absolutePath}"
+
+        recordingJob = CoroutineScope(Dispatchers.IO).launch {
+            val session = FFmpegKit.execute(command)
+            withContext(Dispatchers.Main) {
+                isRecording = false
+                if (session.returnCode.isValueSuccess) {
+                    Toast.makeText(this@MainActivity, "Recording saved", Toast.LENGTH_SHORT).show()
+                } else {
+                    Toast.makeText(this@MainActivity, "Recording failed", Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
+
+        Toast.makeText(this, "Recording started...", Toast.LENGTH_SHORT).show()
+    }
+
+    private fun stopFFmpegRecording() {
+        recordingJob?.cancel()
+        isRecording = false
+        Toast.makeText(this, "Recording stopped", Toast.LENGTH_SHORT).show()
+    }
+
     override fun onUserLeaveHint() {
         super.onUserLeaveHint()
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             enterPictureInPictureMode(PictureInPictureParams.Builder().build())
-        }
-        // ❌ DO NOT stop or detach VLC here
-    }
-
-    override fun onPictureInPictureModeChanged(isInPictureInPictureMode: Boolean, newConfig: Configuration) {
-        super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig)
-
-        if (isInPictureInPictureMode) {
-            // Optionally hide controls, but make sure video stays attached
-            // Ensure VLCVideoLayout is still attached properly
-            mediaPlayer?.setVideoTrackEnabled(true)
-        } else {
-            // Restore UI after PiP
         }
     }
 
@@ -134,5 +115,9 @@ class MainActivity : AppCompatActivity() {
         mediaPlayer?.detachViews()
         mediaPlayer?.release()
         libVLC?.release()
+    }
+
+    override fun onPictureInPictureModeChanged(isInPictureInPictureMode: Boolean, newConfig: Configuration) {
+        super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig)
     }
 }

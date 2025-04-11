@@ -8,6 +8,8 @@ android {
     namespace = "com.example.vyorius"
     compileSdk = 35
 
+
+
     defaultConfig {
         applicationId = "com.example.vyorius"
         minSdk = 26
@@ -25,6 +27,10 @@ android {
                 "proguard-rules.pro"
             )
         }
+    }
+
+    packagingOptions {
+        pickFirst("lib/**/libc++_shared.so")
     }
 
     compileOptions {
@@ -52,6 +58,7 @@ android {
 dependencies {
     // LibVLC AAR
     implementation(mapOf("name" to "libvlc-all", "ext" to "aar"))
+    implementation("com.arthenica:ffmpeg-kit-full:6.0.LTS")
 
     // AndroidX & Jetpack Compose
     implementation(libs.androidx.core.ktx)
